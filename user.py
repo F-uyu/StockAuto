@@ -32,7 +32,8 @@ def num_weekdays(num_days):
         current_date -= datetime.timedelta(days=1)
     return weekdays[::-1]
 
-def get_closing_graph_previous_day(num_days):
+#EMA--------------------------
+def get_closing_graph_previous_day(num_days, company):
     vals = []
     for i in num_days:
         date_obj = datetime.datetime.strptime(i, '%Y-%m-%d')
@@ -41,7 +42,7 @@ def get_closing_graph_previous_day(num_days):
             date_obj = date_obj - datetime.timedelta(days=1)
         last_day = date_obj.strftime('%Y-%m-%d')
         #stock --------------------
-        stock = yf.Ticker("AAPL")
+        stock = yf.Ticker(company)
         stock_data = stock.history(period="1mo", interval="1d")
         closingPrice = stock_data.loc[last_day]['Close']
         #macd = polygonclient.get_macd(ticker="AAPL", timespan="day", timestamp=i)
@@ -50,10 +51,10 @@ def get_closing_graph_previous_day(num_days):
     #vals = [x.value for x in vals]
     return vals
 
-def get_closing_graph_current_day(num_days):
+def get_closing_graph_current_day(num_days, company):
     vals = []
     for i in num_days:
-        stock = yf.Ticker("AAPL")
+        stock = yf.Ticker(company)
         stock_data = stock.history(period="1mo")
         closingPrice = stock_data.loc[i]['Close']
         vals.append(closingPrice)
@@ -68,14 +69,20 @@ def ema_formula(multiplier, previous_price, current_price, days):
         previous_ema = ema
     return vals
 
+#---------------------------
 def xaxis(num_days):
     return num_weekdays(num_days)
 
+def isvalidStock(company):
+    if len(yf.Ticker(company).history()) == 0:
+        return False
+    else:
+        return True
 
-def makegraph(number):
+def makegraph(number, company):
     days = xaxis(number)
-    vals_ema_4 = ema_formula(4, get_closing_graph_previous_day(days), get_closing_graph_current_day(days), number)
-    vals_ema_9 = ema_formula(9, get_closing_graph_previous_day(days), get_closing_graph_current_day(days), number)
+    vals_ema_4 = ema_formula(4, get_closing_graph_previous_day(days, company), get_closing_graph_current_day(days, company), number)
+    vals_ema_9 = ema_formula(9, get_closing_graph_previous_day(days, company), get_closing_graph_current_day(days, company), number)
     df_ema_4 = pd.DataFrame(dict(
         Days = days,
         Value = vals_ema_4
@@ -101,56 +108,105 @@ def getNews(company):
 
 app = Dash(__name__)
 companyName = ""
-
+currStock = False
+lastVal = ""
 #---------------------------------------------------------------
 @app.callback(
     Output('change-company', 'children'),
-    [Input('my-input', 'value')]
+    [Input('input_val', 'value'),
+     Input('dropdown', 'value')]
 )
 
-def Company(name):
-    global companyName
-    companyName = name
+def Company(name, check):
+    if check == "Stock":
+        global companyName
+        companyName = name
+        return None
 
 @app.callback(
     Output('news', 'children'),
-    [Input('my-input', 'value')]
+    [Input('input_val', 'value'),
+     Input('dropdown', 'value')]
 )
-def update_news_div(value):
-    return [
-        html.Div([
-            html.H2(article['title'], style={'font-size': '14px'}),
-            html.P(f"Publisher: {article['publisher']}", style={'font-size': '10px'}),
-            html.P(f"Owners: {', '.join(article['companies'])}", style={'font-size': '10px'}),
-            html.Hr()  # Add a horizontal line to separate articles
-        ], style={'display': 'inline-block', 'width': '30%', 'margin-right': '2%'}) 
-        for article in getNews(value)
-    ]
+def update_news_div(value, check):
+    global currStock
+    global lastVal
+    print(currStock)
+    if (check == "Stock"):
+        if isvalidStock(value):
+            currStock = True
+            lastVal = value
+            return [
+                html.Div([
+                    html.H2(article['title'], style={'font-size': '14px'}),
+                    html.P(f"Publisher: {article['publisher']}", style={'font-size': '10px'}),
+                    html.P(f"Owners: {', '.join(article['companies'])}", style={'font-size': '10px'}),
+                    html.Hr()  # Add a horizontal line to separate articles
+                ], style={'display': 'inline-block', 'width': '30%', 'margin-right': '2%'}) 
+                for article in getNews(value)
+            ]
+    if (currStock == True):
+        print(value)
+        return [
+                html.Div([
+                    html.H2(article['title'], style={'font-size': '14px'}),
+                    html.P(f"Publisher: {article['publisher']}", style={'font-size': '10px'}),
+                    html.P(f"Owners: {', '.join(article['companies'])}", style={'font-size': '10px'}),
+                    html.Hr()  # Add a horizontal line to separate articles
+                ], style={'display': 'inline-block', 'width': '30%', 'margin-right': '2%'}) 
+                for article in getNews(lastVal)
+            ]
 
 @app.callback(
-    Output('macd', 'children'),
-    [Input('my-input', 'value')]
+    Output('ema', 'children'),
+    [Input('input_val', 'value'),
+     Input('dropdown', 'value')]
 )
 
-def update_graph(input_value):
-    return dcc.Graph(
-        id='stock-graph',
-        figure=makegraph(5, input_value)
-    )
+def update_graph(input_value, check):
+    global currStock
+    global lastVal
+    if (check == "EMA"):
+        if isvalidStock(input_value):
+            return [dcc.Graph(
+                id='winner-graph',
+                figure=makegraph(5, input_value)
+            )]
+    if (currStock == True):
+        return [dcc.Graph(
+            id='winner-graph',
+            figure=makegraph(5, lastVal)
+        )]
 #---------------------------------------------------------------
 
 app.layout = html.Div(children=[
     html.Div([
-        html.H1(children='Hello Dash', style={'display': 'inline-block'}),
-        dcc.Input(id='my-input', value='', type='text', style={'display': 'inline-block', 'width': '200px', 'height': '30px', 'margin': '20px'}),
-        html.Div(id='change-company'),
-        html.Div(id = 'news')
-    ], style={'display': 'flex'}),
-    dcc.Graph(
-        id='example-graph',
-        figure=makegraph(5)
-    ),
-])
+        html.H1(children='Stocks', style={'text-align': 'center'}),
+    ], style={'width': '100%'}),
+
+    html.Div([
+        dcc.Input(id='input_val', value='', type='text', style={'width': '200px', 'height': '30px', 'margin': '20px'}),
+        dcc.Dropdown(
+            id = 'dropdown',
+            options=[
+                {'label': 'Stock Name', 'value': 'Stock'},
+                {'label': 'Exponential Moving Average', 'value': 'EMA'},
+                {'label': 'Simple Moving Average', 'value': 'SMA'},
+                {'label': 'Moving Average Convergence/Divergence', 'value': 'MACD'}
+            ],
+            value='MTL',
+            style={'width': '200px', 'height': '30px', 'margin': '10px 0px 0px 0px', 'zIndex': '1'},
+        ),
+    ], style={'display': 'flex', 'justify-content': 'center'}),
+
+    html.Div(id='change-company', style={'display': 'flex', 'justify-content': 'center'}),
+
+    html.Div([
+        html.Div(id='news', style={'float': 'left', 'width': '90%'}),
+        html.Div(id='ema', style={'float': 'right', 'width': '90%'})
+    ], style={'display': 'grid', 'grid-template-columns': '1fr 1fr', 'gap': '10px'})
+], style={'display': 'flex', 'flex-direction': 'column'})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
