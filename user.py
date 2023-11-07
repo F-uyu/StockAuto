@@ -79,9 +79,21 @@ def isvalidStock(company):
     else:
         return True
 
-def makegraph(number, company):
+def makegraph(number, company, vals_list):
+    fig = go.Figure()
     days = xaxis(number)
-    vals_ema_4 = ema_formula(4, get_closing_graph_previous_day(days, company), get_closing_graph_current_day(days, company), number)
+    #ema_data = []
+    for value in vals_list:
+        print(vals_list)
+        vals_ema = ema_formula(int(value), get_closing_graph_previous_day(days, company), get_closing_graph_current_day(days, company), number)
+        df_ema = pd.DataFrame(dict(
+            Days = days,
+            Value = vals_ema
+        ))
+        df_ema.sort_values(by="Days")
+        trace_ema = go.Scatter(x=df_ema['Days'], y=df_ema['Value'], mode='lines', name='EMA ' + str(value), line=dict(color='blue'))
+        fig.add_trace(trace_ema)
+    """vals_ema_4 = ema_formula(4, get_closing_graph_previous_day(days, company), get_closing_graph_current_day(days, company), number)
     vals_ema_9 = ema_formula(9, get_closing_graph_previous_day(days, company), get_closing_graph_current_day(days, company), number)
     df_ema_4 = pd.DataFrame(dict(
         Days = days,
@@ -93,11 +105,11 @@ def makegraph(number, company):
     ))
     df_ema_4 = df_ema_4.sort_values(by="Days")
     df_ema_9 = df_ema_9.sort_values(by="Days")
-    fig = go.Figure()
     trace_ema_4 = go.Scatter(x=df_ema_4['Days'], y=df_ema_4['Value'], mode='lines', name='EMA 4', line=dict(color='blue'))
     trace_ema_9 = go.Scatter(x=df_ema_9['Days'], y=df_ema_9['Value'], mode='lines', name='EMA 9', line=dict(color='red'))
     fig.add_trace(trace_ema_4)
     fig.add_trace(trace_ema_9)
+    """
     return fig
 def getNews(company):
     comp = yf.Ticker(company)
@@ -110,6 +122,7 @@ app = Dash(__name__)
 companyName = ""
 currStock = False
 lastVal = ""
+list_of_lines = []
 #---------------------------------------------------------------
 @app.callback(
     Output('change-company', 'children'),
@@ -131,7 +144,6 @@ def Company(name, check):
 def update_news_div(value, check):
     global currStock
     global lastVal
-    print(currStock)
     if (check == "Stock"):
         if isvalidStock(value):
             currStock = True
@@ -166,16 +178,27 @@ def update_news_div(value, check):
 def update_graph(input_value, check):
     global currStock
     global lastVal
-    if (check == "EMA"):
+    global list_of_lines
+    """if (check == "EMA"):
         if isvalidStock(input_value):
             return [dcc.Graph(
                 id='winner-graph',
                 figure=makegraph(5, input_value)
             )]
+    """
+    if (isvalidStock(input_value) and check == "Stock"):
+            list_of_lines = []
+    if (check == "EMA"):
+        if (input_value.isdigit()):
+            list_of_lines.append(input_value)
+        return [dcc.Graph(
+                id='winner-graph',
+                figure=makegraph(5, lastVal, list_of_lines)
+        )]
     if (currStock == True):
         return [dcc.Graph(
             id='winner-graph',
-            figure=makegraph(5, lastVal)
+            figure=makegraph(5, lastVal, list_of_lines)
         )]
 #---------------------------------------------------------------
 
